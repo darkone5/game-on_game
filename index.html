@@ -43,9 +43,15 @@
   <h1>🏴‍☠️ 2-Player Treasure Hunt</h1>
   
   <div class="hud">
-    <div class="p1-color">Player 1 (WASD)<br>Score: <span id="p1-score">0</span> | HP: <span id="p1-hp">100</span></div>
+    <div class="p1-color">
+      Player 1 (WASD)<br>
+      Score: <span id="p1-score">0</span> | HP: <span id="p1-hp">100</span> | Lives: <span id="p1-lives">3</span>
+    </div>
     <div>Level: <span id="level-display">1</span> / 3</div>
-    <div class="p2-color" style="text-align: right;">Player 2 (Arrows)<br>Score: <span id="p2-score">0</span> | HP: <span id="p2-hp">100</span></div>
+    <div class="p2-color" style="text-align: right;">
+      Player 2 (Arrows)<br>
+      Score: <span id="p2-score">0</span> | HP: <span id="p2-hp">100</span> | Lives: <span id="p2-lives">3</span>
+    </div>
   </div>
 
   <canvas id="gameCanvas" width="1000" height="650"></canvas>
@@ -83,7 +89,7 @@
     let traps = [];
     let staticObstacles = [];
 
-    // Player class with collision checks against static obstacles
+    // Player class with lives & HP system
     class Player {
       constructor(x, y, color, controls) {
         this.startX = x;
@@ -95,12 +101,20 @@
         this.speed = 4.5;
         this.score = 0;
         this.hp = 100;
+        this.lives = 3;
         this.controls = controls;
       }
 
       resetPos() {
         this.x = this.startX;
         this.y = this.startY;
+      }
+
+      fullReset() {
+        this.score = 0;
+        this.hp = 100;
+        this.lives = 3;
+        this.resetPos();
       }
 
       update() {
@@ -112,13 +126,11 @@
         if (keys[this.controls.left]) dx -= this.speed;
         if (keys[this.controls.right]) dx += this.speed;
 
-        // Move X and check collision
         this.x += dx;
         if (this.x < 0 || this.x > canvas.width - this.size || checkObstacleCollision(this)) {
           this.x -= dx;
         }
 
-        // Move Y and check collision
         this.y += dy;
         if (this.y < 0 || this.y > canvas.height - this.size || checkObstacleCollision(this)) {
           this.y -= dy;
@@ -145,9 +157,9 @@
       p1.resetPos();
       p2.resetPos();
 
-      // Generate static obstacles (squares, circles, triangles)
+      // Static obstacles (squares, circles, triangles)
       staticObstacles = [];
-      const obstacleCount = 3 + lvl * 2; // More obstacles in higher rounds
+      const obstacleCount = 3 + lvl * 2;
       const shapes = ['rect', 'circle', 'triangle'];
 
       for (let i = 0; i < obstacleCount; i++) {
@@ -156,7 +168,7 @@
           type: shape,
           x: Math.random() * (canvas.width - 150) + 100,
           y: Math.random() * (canvas.height - 150) + 50,
-          size: Math.random() * 30 + 25 // Different sizes
+          size: Math.random() * 30 + 25
         });
       }
 
@@ -210,19 +222,16 @@
         const pRadius = player.size / 2;
 
         if (obs.type === 'rect') {
-          // Square / Rectangle collision
           if (pCenterX + pRadius > obs.x && pCenterX - pRadius < obs.x + obs.size &&
               pCenterY + pRadius > obs.y && pCenterY - pRadius < obs.y + obs.size) {
             return true;
           }
         } else if (obs.type === 'circle') {
-          // Circle obstacle collision
           const dx = pCenterX - (obs.x + obs.size/2);
           const dy = pCenterY - (obs.y + obs.size/2);
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist < pRadius + obs.size/2) return true;
         } else if (obs.type === 'triangle') {
-          // Triangle obstacle bounding box approximation
           if (pCenterX + pRadius > obs.x && pCenterX - pRadius < obs.x + obs.size &&
               pCenterY + pRadius > obs.y && pCenterY - pRadius < obs.y + obs.size) {
             return true;
@@ -230,6 +239,21 @@
         }
       }
       return false;
+    }
+
+    function handlePlayerDeath(player, name) {
+      player.lives--;
+      playSound(100, 0.1);
+      if (player.lives > 0) {
+        alert(`${name} lost a life! Lives remaining: ${player.lives}`);
+        player.hp = 100;
+        player.resetPos();
+      } else {
+        alert(`❌ Game Over for ${name}! All 3 lives lost. Resetting entire game to Level 1.`);
+        p1.fullReset();
+        p2.fullReset();
+        initLevel(1);
+      }
     }
 
     function update() {
@@ -243,29 +267,29 @@
         if (trap.x < 0 || trap.x > canvas.width - trap.size) trap.vx *= -1;
         if (trap.y < 0 || trap.y > canvas.height - trap.size) trap.vy *= -1;
 
-        [p1, p2].forEach(p => {
-          if (checkCollision(p, trap)) {
-            p.hp -= 2;
-            playSound(130, 0.05);
-            if (p.hp <= 0) {
-              alert(`Player HP reached 0! Restarting Level ${currentLevel}...`);
-              p1.hp = 100;
-              p2.hp = 100;
-              initLevel(currentLevel);
-            }
-          }
-        });
+        if (checkCollision(p1, trap)) {
+          p1.hp -= 2;
+          playSound(130, 0.05);
+          if (p1.hp <= 0) handlePlayerDeath(p1, "Player 1");
+        }
+        if (checkCollision(p2, trap)) {
+          p2.hp -= 2;
+          playSound(130, 0.05);
+          if (p2.hp <= 0) handlePlayerDeath(p2, "Player 2");
+        }
       });
 
       // Treasure collection
       treasures.forEach((t, index) => {
-        [p1, p2].forEach(p => {
-          if (checkCollision(p, t)) {
-            p.score += 10;
-            playSound(650, 0.08);
-            treasures.splice(index, 1);
-          }
-        });
+        if (checkCollision(p1, t)) {
+          p1.score += 10;
+          playSound(650, 0.08);
+          treasures.splice(index, 1);
+        } else if (checkCollision(p2, t)) {
+          p2.score += 10;
+          playSound(650, 0.08);
+          treasures.splice(index, 1);
+        }
       });
 
       // Level progression
@@ -275,24 +299,26 @@
           initLevel(currentLevel + 1);
         } else {
           alert(`🎉 Victory! Game Complete!\nFinal Scores:\nPlayer 1: ${p1.score}\nPlayer 2: ${p2.score}`);
-          p1.score = 0;
-          p2.score = 0;
-          p1.hp = 100;
-          p2.hp = 100;
+          p1.fullReset();
+          p2.fullReset();
           initLevel(1);
         }
       }
 
+      // Update HUD Display
       document.getElementById('p1-score').innerText = p1.score;
       document.getElementById('p1-hp').innerText = Math.max(0, Math.floor(p1.hp));
+      document.getElementById('p1-lives').innerText = p1.lives;
+      
       document.getElementById('p2-score').innerText = p2.score;
       document.getElementById('p2-hp').innerText = Math.max(0, Math.floor(p2.hp));
+      document.getElementById('p2-lives').innerText = p2.lives;
     }
 
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw static obstacles (barriers)
+      // Draw static obstacles
       staticObstacles.forEach(obs => {
         ctx.fillStyle = '#555555';
         ctx.strokeStyle = '#777777';
