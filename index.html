@@ -20,7 +20,7 @@
     .hud {
       display: flex;
       justify-content: space-between;
-      width: 800px;
+      width: 1000px;
       margin-bottom: 10px;
       font-weight: bold;
     }
@@ -28,7 +28,7 @@
     .p2-color { color: #00ff88; }
     canvas {
       border: 4px solid #444;
-      background-color: #2b261f; /* Earthy treasure ground */
+      background-color: #2b261f;
       box-shadow: 0 10px 20px rgba(0,0,0,0.5);
     }
     .controls {
@@ -48,7 +48,8 @@
     <div class="p2-color" style="text-align: right;">Player 2 (Arrows)<br>Score: <span id="p2-score">0</span> | HP: <span id="p2-hp">100</span></div>
   </div>
 
-  <canvas id="gameCanvas" width="800" height="500"></canvas>
+  <!-- Bigger Canvas Size -->
+  <canvas id="gameCanvas" width="1000" height="650"></canvas>
 
   <div class="controls">
     P1: <b>W, A, S, D</b> to move | P2: <b>Arrow Keys</b> to move
@@ -58,7 +59,7 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    // Simple Synthesizer Audio Context
+    // Audio Context Setup
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     function playSound(freq, duration) {
       if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -89,9 +90,9 @@
         this.startY = y;
         this.x = x;
         this.y = y;
-        this.size = 24;
+        this.size = 26;
         this.color = color;
-        this.speed = 4;
+        this.speed = 4.5;
         this.score = 0;
         this.hp = 100;
         this.controls = controls;
@@ -120,8 +121,8 @@
       }
     }
 
-    const p1 = new Player(100, 238, '#00d2ff', { up: 'w', down: 's', left: 'a', right: 'd' });
-    const p2 = new Player(670, 238, '#00ff88', { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' });
+    const p1 = new Player(100, 312, '#00d2ff', { up: 'w', down: 's', left: 'a', right: 'd' });
+    const p2 = new Player(870, 312, '#00ff88', { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' });
 
     function initLevel(lvl) {
       currentLevel = lvl;
@@ -129,28 +130,43 @@
       p1.resetPos();
       p2.resetPos();
 
-      // Create treasures (Gold Coins)
+      // Treasures scale with level
       treasures = [];
-      for (let i = 0; i < 5 + lvl * 2; i++) {
+      const treasureCount = 6 + lvl * 2;
+      for (let i = 0; i < treasureCount; i++) {
         treasures.push({
-          x: Math.random() * (canvas.width - 40) + 20,
-          y: Math.random() * (canvas.height - 40) + 20,
-          radius: 8
+          x: Math.random() * (canvas.width - 60) + 30,
+          y: Math.random() * (canvas.height - 60) + 30,
+          radius: 9
         });
       }
 
-      // Create dynamic traps
+      // Obstacles / Enemies logic based on rounds
       traps = [];
-      const trapCount = 3 + lvl * 3;
-      for (let i = 0; i < trapCount; i++) {
-        traps.push({
-          x: Math.random() * (canvas.width - 60) + 30,
-          y: Math.random() * (canvas.height - 60) + 30,
-          vx: (Math.random() - 0.5) * (lvl * 3),
-          vy: (Math.random() - 0.5) * (lvl * 3),
-          size: 16
-        });
+      if (lvl === 2) {
+        // Round 2: Introduce moderate obstacles/enemies
+        for (let i = 0; i < 5; i++) {
+          traps.push({
+            x: Math.random() * (canvas.width - 80) + 40,
+            y: Math.random() * (canvas.height - 80) + 40,
+            vx: (Math.random() - 0.5) * 3,
+            vy: (Math.random() - 0.5) * 3,
+            size: 20
+          });
+        }
+      } else if (lvl === 3) {
+        // Round 3: Spawn MORE obstacles and MORE enemies
+        for (let i = 0; i < 10; i++) {
+          traps.push({
+            x: Math.random() * (canvas.width - 80) + 40,
+            y: Math.random() * (canvas.height - 80) + 40,
+            vx: (Math.random() - 0.5) * 5,
+            vy: (Math.random() - 0.5) * 5,
+            size: 22
+          });
+        }
       }
+      // Round 1 has 0 traps (safe exploration phase)
     }
 
     function checkCollision(circle1, circle2) {
@@ -164,18 +180,17 @@
       p1.update();
       p2.update();
 
-      // Update trap movements
+      // Update trap/enemy movements & collision
       traps.forEach(trap => {
         trap.x += trap.vx;
         trap.y += trap.vy;
         if (trap.x < 0 || trap.x > canvas.width - trap.size) trap.vx *= -1;
         if (trap.y < 0 || trap.y > canvas.height - trap.size) trap.vy *= -1;
 
-        // Damage checks
         [p1, p2].forEach(p => {
           if (checkCollision(p, trap)) {
-            p.hp -= 1.5;
-            playSound(150, 0.05); // Low hurt sound
+            p.hp -= 2;
+            playSound(130, 0.05);
             if (p.hp <= 0) {
               alert(`Player HP reached 0! Restarting Level ${currentLevel}...`);
               p1.hp = 100;
@@ -186,24 +201,24 @@
         });
       });
 
-      // Treasure collection checks
+      // Treasure collection
       treasures.forEach((t, index) => {
         [p1, p2].forEach(p => {
           if (checkCollision(p, t)) {
             p.score += 10;
-            playSound(600, 0.1); // High coin sound
+            playSound(650, 0.08);
             treasures.splice(index, 1);
           }
         });
       });
 
-      // Progress levels when all treasure is collected
+      // Level progression
       if (treasures.length === 0) {
         if (currentLevel < 3) {
-          alert(`Level ${currentLevel} cleared! On to Level ${currentLevel + 1}!`);
+          alert(`Level ${currentLevel} cleared! Advancing to Level ${currentLevel + 1} (Watch out for obstacles!)`);
           initLevel(currentLevel + 1);
         } else {
-          alert(`🎉 Game Complete!\nFinal Scores:\nPlayer 1: ${p1.score}\nPlayer 2: ${p2.score}`);
+          alert(`🎉 Victory! Game Complete!\nFinal Scores:\nPlayer 1: ${p1.score}\nPlayer 2: ${p2.score}`);
           p1.score = 0;
           p2.score = 0;
           p1.hp = 100;
@@ -212,7 +227,7 @@
         }
       }
 
-      // Update HUD
+      // HUD update
       document.getElementById('p1-score').innerText = p1.score;
       document.getElementById('p1-hp').innerText = Math.max(0, Math.floor(p1.hp));
       document.getElementById('p2-score').innerText = p2.score;
@@ -232,10 +247,12 @@
         ctx.stroke();
       });
 
-      // Draw traps
+      // Draw traps/enemies
       traps.forEach(t => {
         ctx.fillStyle = '#ff3333';
         ctx.fillRect(t.x, t.y, t.size, t.size);
+        ctx.strokeStyle = '#990000';
+        ctx.strokeRect(t.x, t.y, t.size, t.size);
       });
 
       // Draw players
@@ -249,7 +266,6 @@
       requestAnimationFrame(gameLoop);
     }
 
-    // Start game
     initLevel(1);
     gameLoop();
   </script>
