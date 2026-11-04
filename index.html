@@ -48,7 +48,6 @@
     <div class="p2-color" style="text-align: right;">Player 2 (Arrows)<br>Score: <span id="p2-score">0</span> | HP: <span id="p2-hp">100</span></div>
   </div>
 
-  <!-- Bigger Canvas Size -->
   <canvas id="gameCanvas" width="1000" height="650"></canvas>
 
   <div class="controls">
@@ -82,8 +81,9 @@
     let currentLevel = 1;
     let treasures = [];
     let traps = [];
+    let staticObstacles = [];
 
-    // Player classes
+    // Player class with collision checks against static obstacles
     class Player {
       constructor(x, y, color, controls) {
         this.startX = x;
@@ -104,10 +104,25 @@
       }
 
       update() {
-        if (keys[this.controls.up] && this.y > 0) this.y -= this.speed;
-        if (keys[this.controls.down] && this.y < canvas.height - this.size) this.y += this.speed;
-        if (keys[this.controls.left] && this.x > 0) this.x -= this.speed;
-        if (keys[this.controls.right] && this.x < canvas.width - this.size) this.x += this.speed;
+        let dx = 0;
+        let dy = 0;
+
+        if (keys[this.controls.up]) dy -= this.speed;
+        if (keys[this.controls.down]) dy += this.speed;
+        if (keys[this.controls.left]) dx -= this.speed;
+        if (keys[this.controls.right]) dx += this.speed;
+
+        // Move X and check collision
+        this.x += dx;
+        if (this.x < 0 || this.x > canvas.width - this.size || checkObstacleCollision(this)) {
+          this.x -= dx;
+        }
+
+        // Move Y and check collision
+        this.y += dy;
+        if (this.y < 0 || this.y > canvas.height - this.size || checkObstacleCollision(this)) {
+          this.y -= dy;
+        }
       }
 
       draw() {
@@ -130,7 +145,22 @@
       p1.resetPos();
       p2.resetPos();
 
-      // Treasures scale with level
+      // Generate static obstacles (squares, circles, triangles)
+      staticObstacles = [];
+      const obstacleCount = 3 + lvl * 2; // More obstacles in higher rounds
+      const shapes = ['rect', 'circle', 'triangle'];
+
+      for (let i = 0; i < obstacleCount; i++) {
+        const shape = shapes[Math.floor(Math.random() * shapes.length)];
+        staticObstacles.push({
+          type: shape,
+          x: Math.random() * (canvas.width - 150) + 100,
+          y: Math.random() * (canvas.height - 150) + 50,
+          size: Math.random() * 30 + 25 // Different sizes
+        });
+      }
+
+      // Treasures
       treasures = [];
       const treasureCount = 6 + lvl * 2;
       for (let i = 0; i < treasureCount; i++) {
@@ -141,11 +171,10 @@
         });
       }
 
-      // Obstacles / Enemies logic based on rounds
+      // Moving Traps / Enemies
       traps = [];
       if (lvl === 2) {
-        // Round 2: Introduce moderate obstacles/enemies
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 4; i++) {
           traps.push({
             x: Math.random() * (canvas.width - 80) + 40,
             y: Math.random() * (canvas.height - 80) + 40,
@@ -155,18 +184,16 @@
           });
         }
       } else if (lvl === 3) {
-        // Round 3: Spawn MORE obstacles and MORE enemies
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 8; i++) {
           traps.push({
             x: Math.random() * (canvas.width - 80) + 40,
             y: Math.random() * (canvas.height - 80) + 40,
-            vx: (Math.random() - 0.5) * 5,
-            vy: (Math.random() - 0.5) * 5,
+            vx: (Math.random() - 0.5) * 4.5,
+            vy: (Math.random() - 0.5) * 4.5,
             size: 22
           });
         }
       }
-      // Round 1 has 0 traps (safe exploration phase)
     }
 
     function checkCollision(circle1, circle2) {
@@ -176,11 +203,40 @@
       return distance < (circle1.size/2 + (circle2.radius || circle2.size/2));
     }
 
+    function checkObstacleCollision(player) {
+      for (let obs of staticObstacles) {
+        const pCenterX = player.x + player.size / 2;
+        const pCenterY = player.y + player.size / 2;
+        const pRadius = player.size / 2;
+
+        if (obs.type === 'rect') {
+          // Square / Rectangle collision
+          if (pCenterX + pRadius > obs.x && pCenterX - pRadius < obs.x + obs.size &&
+              pCenterY + pRadius > obs.y && pCenterY - pRadius < obs.y + obs.size) {
+            return true;
+          }
+        } else if (obs.type === 'circle') {
+          // Circle obstacle collision
+          const dx = pCenterX - (obs.x + obs.size/2);
+          const dy = pCenterY - (obs.y + obs.size/2);
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < pRadius + obs.size/2) return true;
+        } else if (obs.type === 'triangle') {
+          // Triangle obstacle bounding box approximation
+          if (pCenterX + pRadius > obs.x && pCenterX - pRadius < obs.x + obs.size &&
+              pCenterY + pRadius > obs.y && pCenterY - pRadius < obs.y + obs.size) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
     function update() {
       p1.update();
       p2.update();
 
-      // Update trap/enemy movements & collision
+      // Moving traps updates
       traps.forEach(trap => {
         trap.x += trap.vx;
         trap.y += trap.vy;
@@ -215,7 +271,7 @@
       // Level progression
       if (treasures.length === 0) {
         if (currentLevel < 3) {
-          alert(`Level ${currentLevel} cleared! Advancing to Level ${currentLevel + 1} (Watch out for obstacles!)`);
+          alert(`Level ${currentLevel} cleared! Advancing to Level ${currentLevel + 1}!`);
           initLevel(currentLevel + 1);
         } else {
           alert(`🎉 Victory! Game Complete!\nFinal Scores:\nPlayer 1: ${p1.score}\nPlayer 2: ${p2.score}`);
@@ -227,7 +283,6 @@
         }
       }
 
-      // HUD update
       document.getElementById('p1-score').innerText = p1.score;
       document.getElementById('p1-hp').innerText = Math.max(0, Math.floor(p1.hp));
       document.getElementById('p2-score').innerText = p2.score;
@@ -236,6 +291,31 @@
 
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw static obstacles (barriers)
+      staticObstacles.forEach(obs => {
+        ctx.fillStyle = '#555555';
+        ctx.strokeStyle = '#777777';
+        ctx.lineWidth = 2;
+
+        if (obs.type === 'rect') {
+          ctx.fillRect(obs.x, obs.y, obs.size, obs.size);
+          ctx.strokeRect(obs.x, obs.y, obs.size, obs.size);
+        } else if (obs.type === 'circle') {
+          ctx.beginPath();
+          ctx.arc(obs.x + obs.size/2, obs.y + obs.size/2, obs.size/2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        } else if (obs.type === 'triangle') {
+          ctx.beginPath();
+          ctx.moveTo(obs.x + obs.size/2, obs.y);
+          ctx.lineTo(obs.x + obs.size, obs.y + obs.size);
+          ctx.lineTo(obs.x, obs.y + obs.size);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+      });
 
       // Draw treasures
       treasures.forEach(t => {
@@ -247,7 +327,7 @@
         ctx.stroke();
       });
 
-      // Draw traps/enemies
+      // Draw traps
       traps.forEach(t => {
         ctx.fillStyle = '#ff3333';
         ctx.fillRect(t.x, t.y, t.size, t.size);
