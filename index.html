@@ -89,7 +89,7 @@
     let traps = [];
     let staticObstacles = [];
 
-    // Player class with lives & HP system
+    // Player class with spawn protection
     class Player {
       constructor(x, y, color, controls) {
         this.startX = x;
@@ -103,11 +103,13 @@
         this.hp = 100;
         this.lives = 3;
         this.controls = controls;
+        this.isProtected = true; // Start with spawn protection
       }
 
       resetPos() {
         this.x = this.startX;
         this.y = this.startY;
+        this.isProtected = true; // Re-enable protection on reset
       }
 
       fullReset() {
@@ -120,38 +122,60 @@
       update() {
         let dx = 0;
         let dy = 0;
+        let isMoving = false;
 
-        if (keys[this.controls.up]) dy -= this.speed;
-        if (keys[this.controls.down]) dy += this.speed;
-        if (keys[this.controls.left]) dx -= this.speed;
-        if (keys[this.controls.right]) dx += this.speed;
+        if (keys[this.controls.up]) { dy -= this.speed; isMoving = true; }
+        if (keys[this.controls.down]) { dy += this.speed; isMoving = true; }
+        if (keys[this.controls.left]) { dx -= this.speed; isMoving = true; }
+        if (keys[this.controls.right]) { dx += this.speed; isMoving = true; }
 
-        this.x += dx;
-        if (this.x < 0 || this.x > canvas.width - this.size || checkShapeCollision(this.x, this.y, this.size, this.size)) {
-          this.x -= dx;
+        // If player moves, turn off spawn protection immediately
+        if (isMoving) {
+          this.isProtected = false;
         }
 
-        this.y += dy;
-        if (this.y < 0 || this.y > canvas.height - this.size || checkShapeCollision(this.x, this.y, this.size, this.size)) {
-          this.y -= dy;
+        if (dx !== 0 || dy !== 0) {
+          this.x += dx;
+          if (this.x < 0 || this.x > canvas.width - this.size || checkShapeCollision(this.x, this.y, this.size, this.size)) {
+            this.x -= dx;
+          }
+
+          this.y += dy;
+          if (this.y < 0 || this.y > canvas.height - this.size || checkShapeCollision(this.x, this.y, this.size, this.size)) {
+            this.y -= dy;
+          }
         }
       }
 
       draw() {
-        ctx.fillStyle = this.color;
+        // Flash while protected
+        if (this.isProtected && Math.floor(Date.now() / 150) % 2 === 0) {
+          ctx.fillStyle = '#ffffff'; // White flashing effect
+        } else {
+          ctx.fillStyle = this.color;
+        }
+
         ctx.beginPath();
         ctx.arc(this.x + this.size/2, this.y + this.size/2, this.size/2, 0, Math.PI * 2);
         ctx.fill();
         ctx.lineWidth = 2;
         ctx.strokeStyle = '#fff';
         ctx.stroke();
+
+        // Draw protective shield aura if active
+        if (this.isProtected) {
+          ctx.strokeStyle = '#00ffff';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(this.x + this.size/2, this.y + this.size/2, this.size/2 + 4, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
     }
 
     const p1 = new Player(100, 312, '#00d2ff', { up: 'w', down: 's', left: 'a', right: 'd' });
     const p2 = new Player(870, 312, '#00ff88', { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' });
 
-    // Universal precise collision checker for any box-like entity (players, coins, etc.) against obstacles
     function checkShapeCollision(x, y, w, h) {
       for (let obs of staticObstacles) {
         if (obs.type === 'rect') {
@@ -163,18 +187,14 @@
           const cX = obs.x + obs.size/2;
           const cY = obs.y + obs.size/2;
           const cRadius = obs.size/2;
-          
-          // Find closest point on box to circle center
           const closestX = Math.max(x, Math.min(cX, x + w));
           const closestY = Math.max(y, Math.min(cY, y + h));
-          
           const dx = cX - closestX;
           const dy = cY - closestY;
           if ((dx * dx + dy * dy) < (cRadius * cRadius)) {
             return true;
           }
         } else if (obs.type === 'triangle') {
-          // Bounding box plus buffer for triangle shape
           if (x < obs.x + obs.size && x + w > obs.x &&
               y < obs.y + obs.size && y + h > obs.y) {
             return true;
@@ -190,18 +210,39 @@
       p1.resetPos();
       p2.resetPos();
 
-      // 1. Generate static obstacles first
+      // Safety timeout: Automatically drop protection after 2 seconds even if they don't move
+      setTimeout(() => {
+        p1.isProtected = false;
+        p2.isProtected = false;
+      }, 2000);
+
+      // 1. Generate static obstacles with safe buffer zone around player spawns
       staticObstacles = [];
       const obstacleCount = 3 + lvl * 2;
       const shapes = ['rect', 'circle', 'triangle'];
 
       for (let i = 0; i < obstacleCount; i++) {
-        const shape = shapes[Math.floor(Math.random() * shapes.length)];
+        let obsX, obsY, obsSize, shape, overlapping;
+        let attempts = 0;
+        do {
+          shape = shapes[Math.floor(Math.random() * shapes.length)];
+          obsSize = Math.random() * 30 + 25;
+          obsX = Math.random() * (canvas.width - 150) + 75;
+          obsY = Math.random() * (canvas.height - 150) + 50;
+
+          const p1Buffer = (obsX < 100 + 60 && obsX + obsSize > 100 - 60 && obsY < 312 + 60 && obsY + obsSize > 312 - 60);
+          const p2Buffer = (obsX < 870 + 60 && obsX + obsSize > 870 - 60 && obsY < 312 + 60 && obsY + obsSize > 312 - 60);
+
+          overlapping = p1Buffer || p2Buffer;
+          attempts++;
+          if (attempts > 500) break;
+        } while (overlapping);
+
         staticObstacles.push({
           type: shape,
-          x: Math.random() * (canvas.width - 150) + 100,
-          y: Math.random() * (canvas.height - 150) + 50,
-          size: Math.random() * 30 + 25
+          x: obsX,
+          y: obsY,
+          size: obsSize
         });
       }
 
@@ -211,11 +252,10 @@
       for (let i = 0; i < treasureCount; i++) {
         let tX, tY, overlapping;
         let attempts = 0;
-        const tSize = 18; // diameter of coin
+        const tSize = 18;
         do {
           tX = Math.random() * (canvas.width - 60) + 30;
           tY = Math.random() * (canvas.height - 60) + 30;
-          // Check collision using bounding box of the coin (radius 9 means width/height 18)
           overlapping = checkShapeCollision(tX - 9, tY - 9, tSize, tSize);
           attempts++;
           if (attempts > 500) break; 
@@ -269,6 +309,8 @@
         alert(`${name} lost a life! Lives remaining: ${player.lives}`);
         player.hp = 100;
         player.resetPos();
+        // Reset timer safeguard for respawn
+        setTimeout(() => { player.isProtected = false; }, 2000);
       } else {
         alert(`❌ Game Over for ${name}! All 3 lives lost. Resetting entire game to Level 1.`);
         p1.fullReset();
@@ -288,12 +330,14 @@
         if (trap.x < 0 || trap.x > canvas.width - trap.size) trap.vx *= -1;
         if (trap.y < 0 || trap.y > canvas.height - trap.size) trap.vy *= -1;
 
-        if (checkCollision(p1, {x: trap.x + trap.size/2, y: trap.y + trap.size/2, radius: trap.size/2})) {
+        // Player 1 damage check (Only take damage if NOT protected)
+        if (!p1.isProtected && checkCollision(p1, {x: trap.x + trap.size/2, y: trap.y + trap.size/2, radius: trap.size/2})) {
           p1.hp -= 2;
           playSound(130, 0.05);
           if (p1.hp <= 0) handlePlayerDeath(p1, "Player 1");
         }
-        if (checkCollision(p2, {x: trap.x + trap.size/2, y: trap.y + trap.size/2, radius: trap.size/2})) {
+        // Player 2 damage check (Only take damage if NOT protected)
+        if (!p2.isProtected && checkCollision(p2, {x: trap.x + trap.size/2, y: trap.y + trap.size/2, radius: trap.size/2})) {
           p2.hp -= 2;
           playSound(130, 0.05);
           if (p2.hp <= 0) handlePlayerDeath(p2, "Player 2");
