@@ -154,7 +154,7 @@
   </div>
 
   <div class="controls">
-    P1: <b>W, A, S, D</b> to move | P2: <b>Arrow Keys</b> to move | <b>ESC</b> to Pause
+    P1: <b>W, A, S, D</b> to move | P2: <b>Arrow Keys</b> to move | <b>ESC</b> to Pause | <b>Enter</b> to confirm menu
   </div>
 
   <script>
@@ -181,6 +181,17 @@
       keys[e.key] = true;
       if (e.key === 'Escape') {
         togglePauseMenu();
+      }
+      
+      // Press Enter to trigger the primary overlay button if visible
+      if (e.key === 'Enter') {
+        const overlay = document.getElementById('gameOverlay');
+        if (!overlay.classList.contains('hidden')) {
+          const primaryBtn = overlay.querySelector('.overlay-btn');
+          if (primaryBtn) {
+            primaryBtn.click();
+          }
+        }
       }
     });
     window.addEventListener('keyup', e => keys[e.key] = false);
