@@ -82,10 +82,6 @@
     const keys = {};
     window.addEventListener('keydown', e => {
       keys[e.key] = true;
-      // Prevent scrolling page with arrow keys or spacebar
-      if(["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","w","a","s","d"].indexOf(e.key) > -1) {
-        // e.preventDefault(); 
-      }
     });
     window.addEventListener('keyup', e => keys[e.key] = false);
 
@@ -251,17 +247,34 @@
         });
       }
 
-      // 2. Generate treasures ensuring they DO NOT spawn inside obstacles
+      // 2. Generate varied treasures (Gold: 10pts, Blue: 20pts, Red: 50pts)
       treasures = [];
       const treasureCount = 6 + lvl * 2;
       for (let i = 0; i < treasureCount; i++) {
         let tX, tY, overlapping;
         let attempts = 0;
-        const tSize = 18;
+
+        // Determine coin type by random chance
+        const rand = Math.random();
+        let tColor, tPoints, tRadius;
+        if (rand < 0.6) {
+          tColor = '#ffd700'; // Gold (10 pts)
+          tPoints = 10;
+          tRadius = 8;
+        } else if (rand < 0.85) {
+          tColor = '#00d2ff'; // Blue (20 pts)
+          tPoints = 20;
+          tRadius = 10;
+        } else {
+          tColor = '#ff4d4d'; // Red (50 pts)
+          tPoints = 50;
+          tRadius = 12;
+        }
+
         do {
           tX = Math.random() * (canvas.width - 60) + 30;
           tY = Math.random() * (canvas.height - 60) + 30;
-          overlapping = checkShapeCollision(tX - 9, tY - 9, tSize, tSize);
+          overlapping = checkShapeCollision(tX - tRadius, tY - tRadius, tRadius * 2, tRadius * 2);
           attempts++;
           if (attempts > 500) break; 
         } while (overlapping);
@@ -269,7 +282,9 @@
         treasures.push({
           x: tX,
           y: tY,
-          radius: 9
+          radius: tRadius,
+          points: tPoints,
+          color: tColor
         });
       }
 
@@ -315,135 +330,3 @@
         player.hp = 100;
         player.resetPos();
       } else {
-        alert(`❌ Game Over for ${name}! All 3 lives lost. Resetting entire game to Level 1.`);
-        p1.fullReset();
-        p2.fullReset();
-        initLevel(1);
-      }
-    }
-
-    function update() {
-      p1.update();
-      p2.update();
-
-      const now = Date.now();
-
-      // Moving traps updates
-      traps.forEach(trap => {
-        trap.x += trap.vx;
-        trap.y += trap.vy;
-        if (trap.x < 0 || trap.x > canvas.width - trap.size) trap.vx *= -1;
-        if (trap.y < 0 || trap.y > canvas.height - trap.size) trap.vy *= -1;
-
-        // Player 1 damage check (Only take damage if NOT protected)
-        if (now >= p1.protectEndTime && checkCollision(p1, {x: trap.x + trap.size/2, y: trap.y + trap.size/2, radius: trap.size/2})) {
-          p1.hp -= 2;
-          playSound(130, 0.05);
-          if (p1.hp <= 0) handlePlayerDeath(p1, "Player 1");
-        }
-        // Player 2 damage check (Only take damage if NOT protected)
-        if (now >= p2.protectEndTime && checkCollision(p2, {x: trap.x + trap.size/2, y: trap.y + trap.size/2, radius: trap.size/2})) {
-          p2.hp -= 2;
-          playSound(130, 0.05);
-          if (p2.hp <= 0) handlePlayerDeath(p2, "Player 2");
-        }
-      });
-
-      // Treasure collection
-      treasures.forEach((t, index) => {
-        if (checkCollision(p1, t)) {
-          p1.score += 10;
-          playSound(650, 0.08);
-          treasures.splice(index, 1);
-        } else if (checkCollision(p2, t)) {
-          p2.score += 10;
-          playSound(650, 0.08);
-          treasures.splice(index, 1);
-        }
-      });
-
-      // Level progression
-      if (treasures.length === 0) {
-        if (currentLevel < 3) {
-          alert(`Level ${currentLevel} cleared! Advancing to Level ${currentLevel + 1}!`);
-          initLevel(currentLevel + 1);
-        } else {
-          alert(`🎉 Victory! Game Complete!\nFinal Scores:\nPlayer 1: ${p1.score}\nPlayer 2: ${p2.score}`);
-          p1.fullReset();
-          p2.fullReset();
-          initLevel(1);
-        }
-      }
-
-      // Update HUD Display
-      document.getElementById('p1-score').innerText = p1.score;
-      document.getElementById('p1-hp').innerText = Math.max(0, Math.floor(p1.hp));
-      document.getElementById('p1-lives').innerText = p1.lives;
-      
-      document.getElementById('p2-score').innerText = p2.score;
-      document.getElementById('p2-hp').innerText = Math.max(0, Math.floor(p2.hp));
-      document.getElementById('p2-lives').innerText = p2.lives;
-    }
-
-    function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Draw static obstacles
-      staticObstacles.forEach(obs => {
-        ctx.fillStyle = '#555555';
-        ctx.strokeStyle = '#777777';
-        ctx.lineWidth = 2;
-
-        if (obs.type === 'rect') {
-          ctx.fillRect(obs.x, obs.y, obs.size, obs.size);
-          ctx.strokeRect(obs.x, obs.y, obs.size, obs.size);
-        } else if (obs.type === 'circle') {
-          ctx.beginPath();
-          ctx.arc(obs.x + obs.size/2, obs.y + obs.size/2, obs.size/2, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-        } else if (obs.type === 'triangle') {
-          ctx.beginPath();
-          ctx.moveTo(obs.x + obs.size/2, obs.y);
-          ctx.lineTo(obs.x + obs.size, obs.y + obs.size);
-          ctx.lineTo(obs.x, obs.y + obs.size);
-          ctx.closePath();
-          ctx.fill();
-          ctx.stroke();
-        }
-      });
-
-      // Draw treasures
-      treasures.forEach(t => {
-        ctx.fillStyle = '#ffd700';
-        ctx.beginPath();
-        ctx.arc(t.x, t.y, t.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#b8860b';
-        ctx.stroke();
-      });
-
-      // Draw traps
-      traps.forEach(t => {
-        ctx.fillStyle = '#ff3333';
-        ctx.fillRect(t.x, t.y, t.size, t.size);
-        ctx.strokeStyle = '#990000';
-        ctx.strokeRect(t.x, t.y, t.size, t.size);
-      });
-
-      // Draw players
-      p1.draw();
-      p2.draw();
-    }
-
-    function gameLoop() {
-      update();
-      draw();
-      requestAnimationFrame(gameLoop);
-    }
-
-    initLevel(1);
-    gameLoop();
-  </script>
-</body>
-</html>
