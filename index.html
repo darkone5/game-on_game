@@ -20,12 +20,27 @@
     .hud {
       display: flex;
       justify-content: space-between;
+      align-items: center;
       width: 1000px;
       margin-bottom: 10px;
       font-weight: bold;
     }
     .p1-color { color: #00d2ff; }
     .p2-color { color: #00ff88; }
+    .pause-btn {
+      background: #444;
+      color: #ffd700;
+      border: 2px solid #ffd700;
+      padding: 6px 14px;
+      font-size: 14px;
+      font-weight: bold;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .pause-btn:hover {
+      background: #555;
+    }
     .game-container {
       position: relative;
       width: 1000px;
@@ -72,11 +87,15 @@
       white-space: pre-line;
       line-height: 1.5;
     }
+    .btn-group {
+      display: flex;
+      gap: 15px;
+    }
     .overlay-btn {
       background: #ffd700;
       color: #1a1a1a;
       border: none;
-      padding: 12px 30px;
+      padding: 12px 25px;
       font-size: 18px;
       font-weight: bold;
       border-radius: 6px;
@@ -87,6 +106,13 @@
     .overlay-btn:hover {
       background: #ffae00;
       transform: scale(1.05);
+    }
+    .overlay-btn.secondary {
+      background: #555;
+      color: #fff;
+    }
+    .overlay-btn.secondary:hover {
+      background: #666;
     }
     .controls {
       margin-top: 15px;
@@ -105,9 +131,12 @@
       Score: <span id="p1-score">0</span> | HP: <span id="p1-hp">100</span> | Lives: <span id="p1-lives">3</span>
     </div>
     <div>Level: <span id="level-display">1</span> / 3</div>
-    <div class="p2-color" style="text-align: right;">
-      Player 2 (Arrows)<br>
-      Score: <span id="p2-score">0</span> | HP: <span id="p2-hp">100</span> | Lives: <span id="p2-lives">3</span>
+    <div style="display: flex; align-items: center; gap: 20px;">
+      <div class="p2-color" style="text-align: right;">
+        Player 2 (Arrows)<br>
+        Score: <span id="p2-score">0</span> | HP: <span id="p2-hp">100</span> | Lives: <span id="p2-lives">3</span>
+      </div>
+      <button class="pause-btn" onclick="togglePauseMenu()">⏸ Pause (Esc)</button>
     </div>
   </div>
 
@@ -118,12 +147,14 @@
     <div id="gameOverlay" class="overlay hidden">
       <div id="overlayTitle" class="overlay-title">Level Cleared!</div>
       <div id="overlayMessage" class="overlay-message">Get ready for the next level.</div>
-      <button id="overlayBtn" class="overlay-btn" onclick="closeOverlay()">Continue</button>
+      <div id="overlayBtnContainer" class="btn-group">
+        <button id="overlayBtn" class="overlay-btn" onclick="closeOverlay()">Continue</button>
+      </div>
     </div>
   </div>
 
   <div class="controls">
-    P1: <b>W, A, S, D</b> to move | P2: <b>Arrow Keys</b> to move
+    P1: <b>W, A, S, D</b> to move | P2: <b>Arrow Keys</b> to move | <b>ESC</b> to Pause
   </div>
 
   <script>
@@ -148,6 +179,9 @@
     const keys = {};
     window.addEventListener('keydown', e => {
       keys[e.key] = true;
+      if (e.key === 'Escape') {
+        togglePauseMenu();
+      }
     });
     window.addEventListener('keyup', e => keys[e.key] = false);
 
@@ -157,21 +191,33 @@
     let traps = [];
     let staticObstacles = [];
     let isPaused = false;
+    let isManualPause = false;
     let pendingAction = null;
 
     // Overlay Management
-    function showOverlay(title, message, btnText, callback) {
+    function showOverlay(title, message, buttonsConfig) {
       isPaused = true;
-      pendingAction = callback;
       document.getElementById('overlayTitle').innerText = title;
       document.getElementById('overlayMessage').innerText = message;
-      document.getElementById('overlayBtn').innerText = btnText;
+      
+      const btnContainer = document.getElementById('overlayBtnContainer');
+      btnContainer.innerHTML = ''; // clear buttons
+
+      buttonsConfig.forEach(btnInfo => {
+        const btn = document.createElement('button');
+        btn.innerText = btnInfo.text;
+        btn.className = `overlay-btn ${btnInfo.class || ''}`;
+        btn.onclick = btnInfo.onClick;
+        btnContainer.appendChild(btn);
+      });
+
       document.getElementById('gameOverlay').classList.remove('hidden');
     }
 
     function closeOverlay() {
       document.getElementById('gameOverlay').classList.add('hidden');
       isPaused = false;
+      isManualPause = false;
       if (pendingAction) {
         const action = pendingAction;
         pendingAction = null;
@@ -179,7 +225,38 @@
       }
     }
 
-    // Player class with indefinite AFK protection
+    function togglePauseMenu() {
+      const overlay = document.getElementById('gameOverlay');
+      if (!overlay.classList.contains('hidden') && !isManualPause) {
+        return; // Don't interrupt death or level-up screens with ESC
+      }
+
+      if (isPaused && isManualPause) {
+        closeOverlay();
+      } else if (!isPaused) {
+        isPaused = true;
+        isManualPause = true;
+        showOverlay(
+          "⏸ Game Paused",
+          `Current Level: ${currentLevel}`,
+          [
+            { text: "Resume", class: "", onClick: () => closeOverlay() },
+            { 
+              text: "Restart from Level 1", 
+              class: "secondary", 
+              onClick: () => {
+                closeOverlay();
+                p1.fullReset();
+                p2.fullReset();
+                initLevel(1);
+              } 
+            }
+          ]
+        );
+      }
+    }
+
+    // Player class
     class Player {
       constructor(x, y, color, controls) {
         this.startX = x;
@@ -193,13 +270,13 @@
         this.hp = 100;
         this.lives = 3;
         this.controls = controls;
-        this.isProtected = true; // AFK Protection active until player moves
+        this.isProtected = true; 
       }
 
       resetPos() {
         this.x = this.startX;
         this.y = this.startY;
-        this.isProtected = true; // Re-enable protection on round start/respawn
+        this.isProtected = true; 
       }
 
       fullReset() {
@@ -221,7 +298,6 @@
         if (keys[this.controls.left]) { dx -= this.speed; isMoving = true; }
         if (keys[this.controls.right]) { dx += this.speed; isMoving = true; }
 
-        // The moment the player decides to move, remove protection
         if (isMoving) {
           this.isProtected = false;
         }
@@ -240,7 +316,6 @@
       }
 
       draw() {
-        // Flash white indefinitely while AFK protected
         if (this.isProtected && Math.floor(Date.now() / 150) % 2 === 0) {
           ctx.fillStyle = '#ffffff'; 
         } else {
@@ -254,7 +329,6 @@
         ctx.strokeStyle = '#fff';
         ctx.stroke();
 
-        // Draw protective shield aura if protected
         if (this.isProtected) {
           ctx.strokeStyle = '#00ffff';
           ctx.lineWidth = 2;
@@ -414,22 +488,17 @@
         showOverlay(
           `⚠️ ${name} Lost a Life!`, 
           `Remaining Lives: ${player.lives}`, 
-          "Continue", 
-          () => {
-            player.hp = 100;
-            player.resetPos();
-          }
+          [
+            { text: "Continue", onClick: () => { player.hp = 100; player.resetPos(); closeOverlay(); } }
+          ]
         );
       } else {
         showOverlay(
           `❌ Game Over for ${name}!`, 
           "All 3 lives lost. Resetting game back to Level 1.", 
-          "Try Again", 
-          () => {
-            p1.fullReset();
-            p2.fullReset();
-            initLevel(1);
-          }
+          [
+            { text: "Try Again", onClick: () => { p1.fullReset(); p2.fullReset(); initLevel(1); closeOverlay(); } }
+          ]
         );
       }
     }
@@ -447,13 +516,11 @@
         if (trap.x < 0 || trap.x > canvas.width - trap.size) trap.vx *= -1;
         if (trap.y < 0 || trap.y > canvas.height - trap.size) trap.vy *= -1;
 
-        // Player 1 damage check (Only if NOT protected)
         if (!p1.isProtected && checkCollision(p1, {x: trap.x + trap.size/2, y: trap.y + trap.size/2, radius: trap.size/2})) {
           p1.hp -= 2;
           playSound(130, 0.05);
           if (p1.hp <= 0) handlePlayerDeath(p1, "Player 1");
         }
-        // Player 2 damage check (Only if NOT protected)
         if (!p2.isProtected && checkCollision(p2, {x: trap.x + trap.size/2, y: trap.y + trap.size/2, radius: trap.size/2})) {
           p2.hp -= 2;
           playSound(130, 0.05);
@@ -480,19 +547,17 @@
           showOverlay(
             `🏆 Level ${currentLevel} Cleared!`, 
             `Advancing to Level ${currentLevel + 1}...`, 
-            "Next Level", 
-            () => initLevel(currentLevel + 1)
+            [
+              { text: "Next Level", onClick: () => { initLevel(currentLevel + 1); closeOverlay(); } }
+            ]
           );
         } else {
           showOverlay(
             `🎉 VICTORY!`, 
             `Game Complete!\n\nFinal Scores:\nPlayer 1: ${p1.score}\nPlayer 2: ${p2.score}`, 
-            "Play Again", 
-            () => {
-              p1.fullReset();
-              p2.fullReset();
-              initLevel(1);
-            }
+            [
+              { text: "Play Again", onClick: () => { p1.fullReset(); p2.fullReset(); initLevel(1); closeOverlay(); } }
+            ]
           );
         }
       }
