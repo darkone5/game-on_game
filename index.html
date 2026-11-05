@@ -82,10 +82,26 @@
     .overlay-message {
       font-size: 20px;
       color: #eee;
-      margin-bottom: 30px;
+      margin-bottom: 25px;
       text-align: center;
       white-space: pre-line;
       line-height: 1.5;
+    }
+    .volume-container {
+      margin-bottom: 25px;
+      text-align: center;
+      display: none;
+    }
+    .volume-container label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 16px;
+      color: #ddd;
+    }
+    .volume-slider {
+      width: 220px;
+      accent-color: #ffd700;
+      cursor: pointer;
     }
     .btn-group {
       display: flex;
@@ -147,6 +163,13 @@
     <div id="gameOverlay" class="overlay hidden">
       <div id="overlayTitle" class="overlay-title">Level Cleared!</div>
       <div id="overlayMessage" class="overlay-message">Get ready for the next level.</div>
+      
+      <!-- Volume Slider Control -->
+      <div id="volumeControlContainer" class="volume-container">
+        <label for="volumeSlider">Volume: <span id="volDisplay">100</span>%</label>
+        <input type="range" id="volumeSlider" class="volume-slider" min="0" max="200" value="100" oninput="updateVolume(this.value)">
+      </div>
+
       <div id="overlayBtnContainer" class="btn-group">
         <button id="overlayBtn" class="overlay-btn" onclick="closeOverlay()">Continue</button>
       </div>
@@ -161,15 +184,25 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    // Audio Context Setup
+    // Audio Setup & Master Volume
+    let masterVolume = 1.0;
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function updateVolume(val) {
+      masterVolume = val / 100;
+      document.getElementById('volDisplay').innerText = val;
+    }
+
     function playSound(freq, duration) {
+      if (masterVolume <= 0) return;
       if (audioCtx.state === 'suspended') audioCtx.resume();
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.frequency.value = freq;
       osc.connect(gain);
       gain.connect(audioCtx.destination);
+      
+      gain.gain.setValueAtTime(masterVolume, audioCtx.currentTime);
       osc.start();
       gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
       osc.stop(audioCtx.currentTime + duration);
@@ -206,11 +239,14 @@
     let pendingAction = null;
 
     // Overlay Management
-    function showOverlay(title, message, buttonsConfig) {
+    function showOverlay(title, message, buttonsConfig, showVolume = false) {
       isPaused = true;
       document.getElementById('overlayTitle').innerText = title;
       document.getElementById('overlayMessage').innerText = message;
       
+      // Toggle volume slider visibility
+      document.getElementById('volumeControlContainer').style.display = showVolume ? 'block' : 'none';
+
       const btnContainer = document.getElementById('overlayBtnContainer');
       btnContainer.innerHTML = ''; // clear buttons
 
@@ -262,7 +298,8 @@
                 initLevel(1);
               } 
             }
-          ]
+          ],
+          true // Enable volume slider in pause menu
         );
       }
     }
@@ -501,7 +538,8 @@
           `Remaining Lives: ${player.lives}`, 
           [
             { text: "Continue", onClick: () => { player.hp = 100; player.resetPos(); closeOverlay(); } }
-          ]
+          ],
+          false
         );
       } else {
         showOverlay(
@@ -509,7 +547,8 @@
           "All 3 lives lost. Resetting game back to Level 1.", 
           [
             { text: "Try Again", onClick: () => { p1.fullReset(); p2.fullReset(); initLevel(1); closeOverlay(); } }
-          ]
+          ],
+          false
         );
       }
     }
@@ -560,7 +599,8 @@
             `Advancing to Level ${currentLevel + 1}...`, 
             [
               { text: "Next Level", onClick: () => { initLevel(currentLevel + 1); closeOverlay(); } }
-            ]
+            ],
+            false
           );
         } else {
           showOverlay(
@@ -568,7 +608,8 @@
             `Game Complete!\n\nFinal Scores:\nPlayer 1: ${p1.score}\nPlayer 2: ${p2.score}`, 
             [
               { text: "Play Again", onClick: () => { p1.fullReset(); p2.fullReset(); initLevel(1); closeOverlay(); } }
-            ]
+            ],
+            false
           );
         }
       }
