@@ -80,7 +80,13 @@
 
     // Input state
     const keys = {};
-    window.addEventListener('keydown', e => keys[e.key] = true);
+    window.addEventListener('keydown', e => {
+      keys[e.key] = true;
+      // Prevent scrolling page with arrow keys or spacebar
+      if(["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","w","a","s","d"].indexOf(e.key) > -1) {
+        // e.preventDefault(); 
+      }
+    });
     window.addEventListener('keyup', e => keys[e.key] = false);
 
     // Game state variables
@@ -89,7 +95,7 @@
     let traps = [];
     let staticObstacles = [];
 
-    // Player class with spawn protection
+    // Player class with 2-second freeze and 5-second protection
     class Player {
       constructor(x, y, color, controls) {
         this.startX = x;
@@ -103,13 +109,15 @@
         this.hp = 100;
         this.lives = 3;
         this.controls = controls;
-        this.isProtected = true; // Start with spawn protection
+        this.freezeEndTime = Date.now() + 2000;   // 2 seconds movement freeze
+        this.protectEndTime = Date.now() + 5000;  // 5 seconds invincibility
       }
 
       resetPos() {
         this.x = this.startX;
         this.y = this.startY;
-        this.isProtected = true; // Re-enable protection on reset
+        this.freezeEndTime = Date.now() + 2000;
+        this.protectEndTime = Date.now() + 5000;
       }
 
       fullReset() {
@@ -120,19 +128,21 @@
       }
 
       update() {
+        const now = Date.now();
+        this.isProtected = now < this.protectEndTime;
+
+        // If movement is frozen for the first 2 seconds, ignore inputs completely
+        if (now < this.freezeEndTime) {
+          return; 
+        }
+
         let dx = 0;
         let dy = 0;
-        let isMoving = false;
 
-        if (keys[this.controls.up]) { dy -= this.speed; isMoving = true; }
-        if (keys[this.controls.down]) { dy += this.speed; isMoving = true; }
-        if (keys[this.controls.left]) { dx -= this.speed; isMoving = true; }
-        if (keys[this.controls.right]) { dx += this.speed; isMoving = true; }
-
-        // If player moves, turn off spawn protection immediately
-        if (isMoving) {
-          this.isProtected = false;
-        }
+        if (keys[this.controls.up]) dy -= this.speed;
+        if (keys[this.controls.down]) dy += this.speed;
+        if (keys[this.controls.left]) dx -= this.speed;
+        if (keys[this.controls.right]) dx += this.speed;
 
         if (dx !== 0 || dy !== 0) {
           this.x += dx;
@@ -148,9 +158,10 @@
       }
 
       draw() {
-        // Flash while protected
-        if (this.isProtected && Math.floor(Date.now() / 150) % 2 === 0) {
-          ctx.fillStyle = '#ffffff'; // White flashing effect
+        const now = Date.now();
+        // Flash white while protected
+        if (now < this.protectEndTime && Math.floor(now / 150) % 2 === 0) {
+          ctx.fillStyle = '#ffffff'; 
         } else {
           ctx.fillStyle = this.color;
         }
@@ -163,7 +174,7 @@
         ctx.stroke();
 
         // Draw protective shield aura if active
-        if (this.isProtected) {
+        if (now < this.protectEndTime) {
           ctx.strokeStyle = '#00ffff';
           ctx.lineWidth = 2;
           ctx.beginPath();
@@ -209,12 +220,6 @@
       document.getElementById('level-display').innerText = currentLevel;
       p1.resetPos();
       p2.resetPos();
-
-      // Safety timeout: Automatically drop protection after 2 seconds even if they don't move
-      setTimeout(() => {
-        p1.isProtected = false;
-        p2.isProtected = false;
-      }, 2000);
 
       // 1. Generate static obstacles with safe buffer zone around player spawns
       staticObstacles = [];
@@ -309,8 +314,6 @@
         alert(`${name} lost a life! Lives remaining: ${player.lives}`);
         player.hp = 100;
         player.resetPos();
-        // Reset timer safeguard for respawn
-        setTimeout(() => { player.isProtected = false; }, 2000);
       } else {
         alert(`❌ Game Over for ${name}! All 3 lives lost. Resetting entire game to Level 1.`);
         p1.fullReset();
@@ -323,6 +326,8 @@
       p1.update();
       p2.update();
 
+      const now = Date.now();
+
       // Moving traps updates
       traps.forEach(trap => {
         trap.x += trap.vx;
@@ -331,13 +336,13 @@
         if (trap.y < 0 || trap.y > canvas.height - trap.size) trap.vy *= -1;
 
         // Player 1 damage check (Only take damage if NOT protected)
-        if (!p1.isProtected && checkCollision(p1, {x: trap.x + trap.size/2, y: trap.y + trap.size/2, radius: trap.size/2})) {
+        if (now >= p1.protectEndTime && checkCollision(p1, {x: trap.x + trap.size/2, y: trap.y + trap.size/2, radius: trap.size/2})) {
           p1.hp -= 2;
           playSound(130, 0.05);
           if (p1.hp <= 0) handlePlayerDeath(p1, "Player 1");
         }
         // Player 2 damage check (Only take damage if NOT protected)
-        if (!p2.isProtected && checkCollision(p2, {x: trap.x + trap.size/2, y: trap.y + trap.size/2, radius: trap.size/2})) {
+        if (now >= p2.protectEndTime && checkCollision(p2, {x: trap.x + trap.size/2, y: trap.y + trap.size/2, radius: trap.size/2})) {
           p2.hp -= 2;
           playSound(130, 0.05);
           if (p2.hp <= 0) handlePlayerDeath(p2, "Player 2");
