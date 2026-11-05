@@ -247,14 +247,14 @@
         });
       }
 
-      // 2. Generate varied treasures (Gold: 10pts, Blue: 20pts, Red: 50pts)
+      // 2. Generate varied treasures with +10 coins per level scaling (Level 1: 10, Level 2: 20, Level 3: 30)
       treasures = [];
-      const treasureCount = 6 + lvl * 2;
+      const treasureCount = 10 + (lvl - 1) * 10; 
+
       for (let i = 0; i < treasureCount; i++) {
         let tX, tY, overlapping;
         let attempts = 0;
 
-        // Determine coin type by random chance
         const rand = Math.random();
         let tColor, tPoints, tRadius;
         if (rand < 0.6) {
