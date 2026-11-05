@@ -26,10 +26,67 @@
     }
     .p1-color { color: #00d2ff; }
     .p2-color { color: #00ff88; }
+    .game-container {
+      position: relative;
+      width: 1000px;
+      height: 650px;
+    }
     canvas {
       border: 4px solid #444;
       background-color: #2b261f;
       box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+    }
+    /* In-Game Menu Overlay */
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1000px;
+      height: 650px;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(5px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border: 4px solid #444;
+      box-sizing: border-box;
+      z-index: 10;
+    }
+    .overlay.hidden {
+      display: none;
+    }
+    .overlay-title {
+      font-size: 36px;
+      font-weight: bold;
+      color: #ffd700;
+      margin-bottom: 15px;
+      text-align: center;
+      text-shadow: 0 4px 10px rgba(0,0,0,0.8);
+    }
+    .overlay-message {
+      font-size: 20px;
+      color: #eee;
+      margin-bottom: 30px;
+      text-align: center;
+      white-space: pre-line;
+      line-height: 1.5;
+    }
+    .overlay-btn {
+      background: #ffd700;
+      color: #1a1a1a;
+      border: none;
+      padding: 12px 30px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      transition: transform 0.1s, background-color 0.2s;
+    }
+    .overlay-btn:hover {
+      background: #ffae00;
+      transform: scale(1.05);
     }
     .controls {
       margin-top: 15px;
@@ -54,7 +111,16 @@
     </div>
   </div>
 
-  <canvas id="gameCanvas" width="1000" height="650"></canvas>
+  <div class="game-container">
+    <canvas id="gameCanvas" width="1000" height="650"></canvas>
+    
+    <!-- Modal Menu -->
+    <div id="gameOverlay" class="overlay hidden">
+      <div id="overlayTitle" class="overlay-title">Level Cleared!</div>
+      <div id="overlayMessage" class="overlay-message">Get ready for the next level.</div>
+      <button id="overlayBtn" class="overlay-btn" onclick="closeOverlay()">Continue</button>
+    </div>
+  </div>
 
   <div class="controls">
     P1: <b>W, A, S, D</b> to move | P2: <b>Arrow Keys</b> to move
@@ -90,8 +156,30 @@
     let treasures = [];
     let traps = [];
     let staticObstacles = [];
+    let isPaused = false;
+    let pendingAction = null;
 
-    // Player class with 2-second freeze and 5-second protection
+    // Overlay Management
+    function showOverlay(title, message, btnText, callback) {
+      isPaused = true;
+      pendingAction = callback;
+      document.getElementById('overlayTitle').innerText = title;
+      document.getElementById('overlayMessage').innerText = message;
+      document.getElementById('overlayBtn').innerText = btnText;
+      document.getElementById('gameOverlay').classList.remove('hidden');
+    }
+
+    function closeOverlay() {
+      document.getElementById('gameOverlay').classList.add('hidden');
+      isPaused = false;
+      if (pendingAction) {
+        const action = pendingAction;
+        pendingAction = null;
+        action();
+      }
+    }
+
+    // Player class
     class Player {
       constructor(x, y, color, controls) {
         this.startX = x;
@@ -105,8 +193,8 @@
         this.hp = 100;
         this.lives = 3;
         this.controls = controls;
-        this.freezeEndTime = Date.now() + 2000;   // 2 seconds movement freeze
-        this.protectEndTime = Date.now() + 5000;  // 5 seconds invincibility
+        this.freezeEndTime = Date.now() + 2000;
+        this.protectEndTime = Date.now() + 5000;
       }
 
       resetPos() {
@@ -124,13 +212,12 @@
       }
 
       update() {
+        if (isPaused) return;
+
         const now = Date.now();
         this.isProtected = now < this.protectEndTime;
 
-        // If movement is frozen for the first 2 seconds, ignore inputs completely
-        if (now < this.freezeEndTime) {
-          return; 
-        }
+        if (now < this.freezeEndTime) return; 
 
         let dx = 0;
         let dy = 0;
@@ -155,7 +242,6 @@
 
       draw() {
         const now = Date.now();
-        // Flash white while protected
         if (now < this.protectEndTime && Math.floor(now / 150) % 2 === 0) {
           ctx.fillStyle = '#ffffff'; 
         } else {
@@ -169,7 +255,6 @@
         ctx.strokeStyle = '#fff';
         ctx.stroke();
 
-        // Draw protective shield aura if active
         if (now < this.protectEndTime) {
           ctx.strokeStyle = '#00ffff';
           ctx.lineWidth = 2;
@@ -217,7 +302,7 @@
       p1.resetPos();
       p2.resetPos();
 
-      // 1. Generate static obstacles with safe buffer zone around player spawns
+      // Static obstacles
       staticObstacles = [];
       const obstacleCount = 3 + lvl * 2;
       const shapes = ['rect', 'circle', 'triangle'];
@@ -247,7 +332,7 @@
         });
       }
 
-      // 2. Generate varied treasures with +10 coins per level scaling (Level 1: 10, Level 2: 20, Level 3: 30)
+      // Generate varied treasures (+10 coins per level)
       treasures = [];
       const treasureCount = 10 + (lvl - 1) * 10; 
 
@@ -258,15 +343,15 @@
         const rand = Math.random();
         let tColor, tPoints, tRadius;
         if (rand < 0.6) {
-          tColor = '#ffd700'; // Gold (10 pts)
+          tColor = '#ffd700';
           tPoints = 10;
           tRadius = 8;
         } else if (rand < 0.85) {
-          tColor = '#00d2ff'; // Blue (20 pts)
+          tColor = '#00d2ff';
           tPoints = 20;
           tRadius = 10;
         } else {
-          tColor = '#ff4d4d'; // Red (50 pts)
+          tColor = '#ff4d4d';
           tPoints = 50;
           tRadius = 12;
         }
@@ -288,7 +373,7 @@
         });
       }
 
-      // 3. Moving Traps / Enemies
+      // Moving Traps
       traps = [];
       if (lvl === 2) {
         for (let i = 0; i < 4; i++) {
@@ -326,18 +411,32 @@
       player.lives--;
       playSound(100, 0.1);
       if (player.lives > 0) {
-        alert(`${name} lost a life! Lives remaining: ${player.lives}`);
-        player.hp = 100;
-        player.resetPos();
+        showOverlay(
+          `⚠️ ${name} Lost a Life!`, 
+          `Remaining Lives: ${player.lives}`, 
+          "Continue", 
+          () => {
+            player.hp = 100;
+            player.resetPos();
+          }
+        );
       } else {
-        alert(`❌ Game Over for ${name}! All 3 lives lost. Resetting entire game to Level 1.`);
-        p1.fullReset();
-        p2.fullReset();
-        initLevel(1);
+        showOverlay(
+          `❌ Game Over for ${name}!`, 
+          "All 3 lives lost. Resetting game back to Level 1.", 
+          "Try Again", 
+          () => {
+            p1.fullReset();
+            p2.fullReset();
+            initLevel(1);
+          }
+        );
       }
     }
 
     function update() {
+      if (isPaused) return;
+
       p1.update();
       p2.update();
 
@@ -350,13 +449,11 @@
         if (trap.x < 0 || trap.x > canvas.width - trap.size) trap.vx *= -1;
         if (trap.y < 0 || trap.y > canvas.height - trap.size) trap.vy *= -1;
 
-        // Player 1 damage check (Only take damage if NOT protected)
         if (now >= p1.protectEndTime && checkCollision(p1, {x: trap.x + trap.size/2, y: trap.y + trap.size/2, radius: trap.size/2})) {
           p1.hp -= 2;
           playSound(130, 0.05);
           if (p1.hp <= 0) handlePlayerDeath(p1, "Player 1");
         }
-        // Player 2 damage check (Only take damage if NOT protected)
         if (now >= p2.protectEndTime && checkCollision(p2, {x: trap.x + trap.size/2, y: trap.y + trap.size/2, radius: trap.size/2})) {
           p2.hp -= 2;
           playSound(130, 0.05);
@@ -364,7 +461,7 @@
         }
       });
 
-      // Treasure collection with dynamic points & pitch
+      // Treasure collection
       treasures.forEach((t, index) => {
         if (checkCollision(p1, t)) {
           p1.score += t.points;
@@ -380,13 +477,23 @@
       // Level progression
       if (treasures.length === 0) {
         if (currentLevel < 3) {
-          alert(`Level ${currentLevel} cleared! Advancing to Level ${currentLevel + 1}!`);
-          initLevel(currentLevel + 1);
+          showOverlay(
+            `🏆 Level ${currentLevel} Cleared!`, 
+            `Advancing to Level ${currentLevel + 1}...`, 
+            "Next Level", 
+            () => initLevel(currentLevel + 1)
+          );
         } else {
-          alert(`🎉 Victory! Game Complete!\nFinal Scores:\nPlayer 1: ${p1.score}\nPlayer 2: ${p2.score}`);
-          p1.fullReset();
-          p2.fullReset();
-          initLevel(1);
+          showOverlay(
+            `🎉 VICTORY!`, 
+            `Game Complete!\n\nFinal Scores:\nPlayer 1: ${p1.score}\nPlayer 2: ${p2.score}`, 
+            "Play Again", 
+            () => {
+              p1.fullReset();
+              p2.fullReset();
+              initLevel(1);
+            }
+          );
         }
       }
 
@@ -428,7 +535,7 @@
         }
       });
 
-      // Draw treasures with their specific colors and sizes
+      // Draw treasures
       treasures.forEach(t => {
         ctx.fillStyle = t.color;
         ctx.beginPath();
