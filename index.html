@@ -216,7 +216,6 @@
         togglePauseMenu();
       }
       
-      // Press Enter to trigger the primary overlay button if visible
       if (e.key === 'Enter') {
         const overlay = document.getElementById('gameOverlay');
         if (!overlay.classList.contains('hidden')) {
@@ -244,11 +243,10 @@
       document.getElementById('overlayTitle').innerText = title;
       document.getElementById('overlayMessage').innerText = message;
       
-      // Toggle volume slider visibility
       document.getElementById('volumeControlContainer').style.display = showVolume ? 'block' : 'none';
 
       const btnContainer = document.getElementById('overlayBtnContainer');
-      btnContainer.innerHTML = ''; // clear buttons
+      btnContainer.innerHTML = ''; 
 
       buttonsConfig.forEach(btnInfo => {
         const btn = document.createElement('button');
@@ -275,7 +273,7 @@
     function togglePauseMenu() {
       const overlay = document.getElementById('gameOverlay');
       if (!overlay.classList.contains('hidden') && !isManualPause) {
-        return; // Don't interrupt death or level-up screens with ESC
+        return; 
       }
 
       if (isPaused && isManualPause) {
@@ -299,7 +297,7 @@
               } 
             }
           ],
-          true // Enable volume slider in pause menu
+          true 
         );
       }
     }
@@ -454,7 +452,7 @@
         });
       }
 
-      // Generate varied treasures (+10 coins per level)
+      // Generate varied treasures with 4 coin tiers (+10 coins per level)
       treasures = [];
       const treasureCount = 10 + (lvl - 1) * 10; 
 
@@ -464,16 +462,20 @@
 
         const rand = Math.random();
         let tColor, tPoints, tRadius;
-        if (rand < 0.6) {
-          tColor = '#ffd700';
+        if (rand < 0.50) {
+          tColor = '#ffd700'; // Gold (10 pts)
           tPoints = 10;
           tRadius = 8;
-        } else if (rand < 0.85) {
-          tColor = '#00d2ff';
+        } else if (rand < 0.75) {
+          tColor = '#c0c0c0'; // Silver (15 pts) - NEW 4th coin type
+          tPoints = 15;
+          tRadius = 9;
+        } else if (rand < 0.90) {
+          tColor = '#00d2ff'; // Blue (20 pts)
           tPoints = 20;
           tRadius = 10;
         } else {
-          tColor = '#ff4d4d';
+          tColor = '#ff4d4d'; // Red (50 pts)
           tPoints = 50;
           tRadius = 12;
         }
