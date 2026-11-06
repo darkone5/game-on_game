@@ -452,7 +452,7 @@
         });
       }
 
-      // Generate varied treasures with 4 coin tiers (+10 coins per level)
+      // Generate varied treasures with updated 4 coin tiers (+10 coins per level)
       treasures = [];
       const treasureCount = 10 + (lvl - 1) * 10; 
 
@@ -463,19 +463,19 @@
         const rand = Math.random();
         let tColor, tPoints, tRadius;
         if (rand < 0.50) {
-          tColor = '#ffd700'; // Gold (10 pts)
+          tColor = '#cd7f32'; // Bronze (10 pts)
           tPoints = 10;
           tRadius = 8;
         } else if (rand < 0.75) {
-          tColor = '#c0c0c0'; // Silver (15 pts) - NEW 4th coin type
-          tPoints = 15;
+          tColor = '#c0c0c0'; // Silver (20 pts)
+          tPoints = 20;
           tRadius = 9;
         } else if (rand < 0.90) {
-          tColor = '#00d2ff'; // Blue (20 pts)
-          tPoints = 20;
+          tColor = '#ffd700'; // Gold (35 pts)
+          tPoints = 35;
           tRadius = 10;
         } else {
-          tColor = '#ff4d4d'; // Red (50 pts)
+          tColor = '#b9f2ff'; // Diamond (50 pts)
           tPoints = 50;
           tRadius = 12;
         }
